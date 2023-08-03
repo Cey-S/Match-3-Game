@@ -55,6 +55,10 @@ public class BoardManager : MonoBehaviour
                 GameObject newTile = Instantiate(tile,
                     new Vector3(startX + (x * tileSize.x), startY + (y * tileSize.y), 0),
                     tile.transform.rotation);
+                newTile.transform.parent = transform;
+                Sprite randomSprite = characters[Random.Range(0, characters.Count)];
+                newTile.GetComponent<SpriteRenderer>().sprite = randomSprite;
+
                 tiles[x, y] = newTile;
             }
         }
