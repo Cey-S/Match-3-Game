@@ -48,6 +48,9 @@ public class BoardManager : MonoBehaviour
         float startX = boardCorners[0].x + tileSize.x / 2 + offset;
         float startY = boardCorners[0].y + tileSize.y / 2;
 
+        Sprite[] previousLeft = new Sprite[columnSize];
+        Sprite previousBelow = null;
+
         for (int x = 0; x < rowSize; x++)
         {
             for (int y = 0; y < columnSize; y++)
@@ -56,8 +59,17 @@ public class BoardManager : MonoBehaviour
                     new Vector3(startX + (x * tileSize.x), startY + (y * tileSize.y), 0),
                     tile.transform.rotation);
                 newTile.transform.parent = transform;
-                Sprite randomSprite = characters[Random.Range(0, characters.Count)];
+
+                List<Sprite> possibleCharacters = new List<Sprite>();
+                possibleCharacters.AddRange(characters);
+                possibleCharacters.Remove(previousLeft[y]);
+                possibleCharacters.Remove(previousBelow);
+
+                Sprite randomSprite = possibleCharacters[Random.Range(0, possibleCharacters.Count)];
                 newTile.GetComponent<SpriteRenderer>().sprite = randomSprite;
+
+                previousLeft[y] = randomSprite;
+                previousBelow = randomSprite;
 
                 tiles[x, y] = newTile;
             }
