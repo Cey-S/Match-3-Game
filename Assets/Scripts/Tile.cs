@@ -62,8 +62,16 @@ public class Tile : MonoBehaviour
             }
             else
             {
-                SwapTiles(previousSelected, this);
-                previousSelected.Deselect();
+                if (GetAllAdjacentTiles().Contains(previousSelected.gameObject))
+                {
+                    SwapTiles(previousSelected, this);
+                    previousSelected.Deselect();
+                }
+                else
+                {
+                    previousSelected.GetComponent<Tile>().Deselect();
+                    Select();
+                }                
             }
         }
     }
@@ -104,5 +112,27 @@ public class Tile : MonoBehaviour
             tile1.transform.SetParent(tile2.transform.parent);
             tile2.transform.SetParent(tempParent);
         }
+    }
+
+    private GameObject GetAdjacent(Vector2 castDir)
+    {
+        RaycastHit2D hit = Physics2D.Raycast(Position, castDir);
+        if (hit.collider != null)
+        {
+            return hit.collider.gameObject;
+        }
+
+        return null;
+    }
+
+    private List<GameObject> GetAllAdjacentTiles()
+    {
+        List<GameObject> adjacentTiles = new List<GameObject>();
+        for (int i = 0; i < adjacentDirections.Length; i++)
+        {
+            adjacentTiles.Add(GetAdjacent(adjacentDirections[i]));
+        }
+
+        return adjacentTiles;
     }
 }
