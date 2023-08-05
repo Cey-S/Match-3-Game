@@ -8,6 +8,8 @@ public class BoardManager : MonoBehaviour
 
     public RectTransform board;
     public List<Sprite> characters = new List<Sprite>();
+    public List<Sprite> gridColors = new List<Sprite>();
+    public GameObject grid;
     public GameObject tile; // tile prefab
 
     private Vector3[] boardCorners = new Vector3[4]; // board corners on world space, clockwise, 0 is bottom left
@@ -19,7 +21,7 @@ public class BoardManager : MonoBehaviour
     {
         instance = GetComponent<BoardManager>();
 
-        Vector3[] corners = new Vector3[4]; 
+        Vector3[] corners = new Vector3[4];
         board.GetWorldCorners(corners); // board corners on canvas
 
         for (int i = 0; i < corners.Length; i++)
@@ -36,7 +38,7 @@ public class BoardManager : MonoBehaviour
         int tilesInColumn = Mathf.FloorToInt(boardHeight / tileSize.y);
 
         // for centering the board
-        float offset = (boardWidth - (tileSize.x * tilesInRow)) / 2;
+        float offset = (boardWidth - (tileSize.x * tilesInRow)) * 0.5f;
 
         CreateBoard(tilesInRow, tilesInColumn, tileSize, offset);
     }
@@ -45,8 +47,8 @@ public class BoardManager : MonoBehaviour
     {
         tiles = new GameObject[rowSize, columnSize];
 
-        float startX = boardCorners[0].x + tileSize.x / 2 + offset;
-        float startY = boardCorners[0].y + tileSize.y / 2;
+        float startX = boardCorners[0].x + tileSize.x * 0.5f + offset;
+        float startY = boardCorners[0].y + tileSize.y * 0.5f;
 
         Sprite[] previousLeft = new Sprite[columnSize];
         Sprite previousBelow = null;
@@ -55,10 +57,17 @@ public class BoardManager : MonoBehaviour
         {
             for (int y = 0; y < columnSize; y++)
             {
-                GameObject newTile = Instantiate(tile,
-                    new Vector3(startX + (x * tileSize.x), startY + (y * tileSize.y), 0),
-                    tile.transform.rotation);
-                newTile.transform.parent = transform;
+                Vector3 tilePos = new Vector3(startX + (x * tileSize.x), startY + (y * tileSize.y), 0);
+                GameObject newGrid = Instantiate(grid, tilePos, grid.transform.rotation);
+                GameObject newTile = Instantiate(tile, tilePos, tile.transform.rotation);
+
+                newTile.GetComponent<Tile>().Position = tilePos;
+
+                newGrid.transform.parent = transform;
+                newTile.transform.parent = newGrid.transform;
+
+                Sprite gridColor = ((x + y) % 2 == 0) ? gridColors[0] : gridColors[1]; // Checkered pattern
+                newGrid.GetComponent<SpriteRenderer>().sprite = gridColor;
 
                 List<Sprite> possibleCharacters = new List<Sprite>();
                 possibleCharacters.AddRange(characters);
