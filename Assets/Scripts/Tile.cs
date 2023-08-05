@@ -17,11 +17,10 @@ public class Tile : MonoBehaviour
 
     private static Color selectedColor = new Color(0.5f, 0.5f, 0.5f, 1.0f);
     private static Tile previousSelected = null;
-    private static bool isSwapping = false;
+    private static bool lockTiles = false; // prevent tiles from being selected
 
     private SpriteRenderer render;
     private bool isSelected = false;
-    private bool matchFound = false;
 
     private Vector2[] adjacentDirections = new Vector2[] { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
 
@@ -46,7 +45,7 @@ public class Tile : MonoBehaviour
 
     private async void OnMouseDown()
     {
-        if (isSwapping || BoardManager.instance.IsShifting || render.sprite == null)
+        if (lockTiles || BoardManager.instance.IsShifting || render.sprite == null)
         {
             return;
         }
@@ -65,11 +64,19 @@ public class Tile : MonoBehaviour
             {
                 if (GetAllAdjacentTiles().Contains(previousSelected.gameObject))
                 {
+                    lockTiles = true;
+
                     await Swap(previousSelected, this);
+
+                    var tasks = new List<Task>();
+                    tasks.Add(previousSelected.ClearAllMatches());
+                    tasks.Add(ClearAllMatches());
                     
-                    previousSelected.ClearAllMatches();
+                    await Task.WhenAll(tasks);
+                    
                     previousSelected.Deselect();
-                    ClearAllMatches();
+                    
+                    lockTiles = false;
                 }
                 else
                 {
@@ -82,8 +89,6 @@ public class Tile : MonoBehaviour
 
     private async Task Swap(Tile tile1, Tile tile2)
     {
-        isSwapping = true;
-
         if (tile1.GetComponent<SpriteRenderer>().sprite == tile2.GetComponent<SpriteRenderer>().sprite)
         {
             var yoyoSequence = DOTween.Sequence();
@@ -109,10 +114,9 @@ public class Tile : MonoBehaviour
             tile1.transform.SetParent(tile2.transform.parent);
             tile2.transform.SetParent(tempParent);
         }
-
-        isSwapping = false;
     }
 
+    #region FINDING ADJACENT TILES
     private List<GameObject> GetAllAdjacentTiles()
     {
         List<GameObject> adjacentTiles = new List<GameObject>();
@@ -134,41 +138,68 @@ public class Tile : MonoBehaviour
 
         return null;
     }
+    #endregion
 
-    public void ClearAllMatches()
+    public async Task ClearAllMatches()
     {
         if (render.sprite == null)
         {
             return;
         }
 
-        ClearMatch(new Vector2[2] { Vector2.left, Vector2.right });
-        ClearMatch(new Vector2[2] { Vector2.up, Vector2.down });
-        if (matchFound)
+        List<GameObject> matchingTiles = MatchToClear();
+
+        if (matchingTiles.Count != 0)
         {
-            render.sprite = null;
-            matchFound = false;
+            await Clear(matchingTiles);
         }
     }
 
-    private void ClearMatch(Vector2[] paths)
+    private async Task Clear(List<GameObject> tiles)
     {
-        List<GameObject> matchingTiles = new List<GameObject>();
-        for (int i = 0; i < paths.Length; i++)
+        var sequence = DOTween.Sequence();
+
+        tiles.Add(transform.gameObject);
+
+        foreach (GameObject tile in tiles)
         {
-            matchingTiles.AddRange(FindMatch(paths[i]));
+            sequence.Join(tile.transform.DOScale(Vector3.zero, 0.5f));
         }
 
-        if (matchingTiles.Count >= 2)
-        {
-            for (int i = 0; i < matchingTiles.Count; i++)
-            {
-                matchingTiles[i].GetComponent<SpriteRenderer>().sprite = null;
-            }
-
-            matchFound = true;
-        }
+        await sequence.Play().AsyncWaitForCompletion();
     }
+
+    private List<GameObject> MatchToClear()
+    {
+        List<GameObject> matchToClear = new List<GameObject>();
+
+        List<GameObject> matching_Horizontal = new List<GameObject>();
+        List<GameObject> matching_Vertical = new List<GameObject>();
+
+        for (int i = 0; i < adjacentDirections.Length; i++)
+        {
+            if (i < 2)
+            {
+                matching_Vertical.AddRange(FindMatch(adjacentDirections[i]));
+            }
+            else
+            {
+                matching_Horizontal.AddRange(FindMatch(adjacentDirections[i]));
+            }
+        }
+
+        if (matching_Vertical.Count >= 2)
+        {
+            matchToClear.AddRange(matching_Vertical);
+        }
+        
+        if (matching_Horizontal.Count >= 2)
+        {
+            matchToClear.AddRange(matching_Horizontal);
+        }
+
+        return matchToClear;
+    }    
 
     private List<GameObject> FindMatch(Vector2 castDir)
     {
