@@ -1,5 +1,7 @@
+using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public class BoardManager : MonoBehaviour
@@ -13,6 +15,9 @@ public class BoardManager : MonoBehaviour
     public GameObject tile; // tile prefab
 
     private Vector3[] boardCorners = new Vector3[4]; // board corners on world space, clockwise, 0 is bottom left
+    private int _rowSize;
+    private int _columnSize;
+    private Vector2 tileSize;
     private GameObject[,] tiles;
 
     public bool IsShifting { get; private set; }
@@ -32,18 +37,18 @@ public class BoardManager : MonoBehaviour
         float boardWidth = boardCorners[3].x - boardCorners[0].x;
         float boardHeight = boardCorners[1].y - boardCorners[0].y;
 
-        Vector2 tileSize = tile.GetComponent<SpriteRenderer>().bounds.size;
+        tileSize = tile.GetComponent<SpriteRenderer>().bounds.size;
 
-        int tilesInRow = Mathf.FloorToInt(boardWidth / tileSize.x);
-        int tilesInColumn = Mathf.FloorToInt(boardHeight / tileSize.y);
+        _rowSize = Mathf.FloorToInt(boardWidth / tileSize.x);
+        _columnSize = Mathf.FloorToInt(boardHeight / tileSize.y);
 
         // for centering the board
-        float offset = (boardWidth - (tileSize.x * tilesInRow)) * 0.5f;
+        float offset = (boardWidth - (tileSize.x * _rowSize)) * 0.5f;
 
-        CreateBoard(tilesInRow, tilesInColumn, tileSize, offset);
+        CreateBoard(_rowSize, _columnSize, offset);
     }
 
-    private void CreateBoard(int rowSize, int columnSize, Vector2 tileSize, float offset)
+    private void CreateBoard(int rowSize, int columnSize, float offset)
     {
         tiles = new GameObject[rowSize, columnSize];
 
@@ -61,7 +66,7 @@ public class BoardManager : MonoBehaviour
                 GameObject newGrid = Instantiate(grid, tilePos, grid.transform.rotation);
                 GameObject newTile = Instantiate(tile, tilePos, tile.transform.rotation);
 
-                newTile.GetComponent<Tile>().Position = tilePos;
+                newTile.GetComponent<Tile>().GridPos = new Tile.GridPosition(x, y, true);
 
                 newGrid.transform.parent = transform;
                 newTile.transform.parent = newGrid.transform;
@@ -83,5 +88,90 @@ public class BoardManager : MonoBehaviour
                 tiles[x, y] = newTile;
             }
         }
+    }
+
+    public async Task FindEmptyTiles()
+    {
+        IsShifting = true;
+
+        var shiftTasks = new List<Task>();
+
+        for (int x = 0; x < _rowSize; x++)
+        {
+            List<Tile> horizontalMatch = new List<Tile>();
+            for (int y = 0; y < _columnSize; y++)
+            {
+                if (!tiles[x, y].GetComponent<Tile>().GridPos.IsFilled)
+                {
+                    horizontalMatch.Add(tiles[x, y].GetComponent<Tile>());
+                }
+            }
+            shiftTasks.Add(ShiftTilesDown(horizontalMatch));
+        }
+
+        await Task.WhenAll(shiftTasks);
+
+        
+        IsShifting = false;
+    }    
+
+    private async Task ShiftTilesDown(List<Tile> horizontalMatch)
+    {
+        int matchCount = horizontalMatch.Count;
+        if (matchCount != 0)
+        {
+            int x = horizontalMatch[0].GridPos.X;
+
+            List<Vector3> originalPos = new List<Vector3>();
+            for (int i = 0; i < matchCount; i++)
+            {
+                originalPos.Add(horizontalMatch[i].transform.position);
+                Vector3 offset = new Vector3(0, tileSize.y + (i * tileSize.y), 0);
+                horizontalMatch[i].transform.position = tiles[x, _columnSize - 1].transform.position + offset;
+
+                Sprite randomSprite = characters[Random.Range(0, characters.Count)];
+                horizontalMatch[i].GetComponent<SpriteRenderer>().sprite = randomSprite;
+            }
+
+            int yStart = horizontalMatch[0].GridPos.Y;
+            int shiftingTiles = _columnSize - yStart;
+            int tilesAbove = shiftingTiles - matchCount;
+            int currentIndex = 0;
+            int matchIndex = 0;
+            var sequence = DOTween.Sequence();
+
+            for (int y = yStart; y < _columnSize; y++)
+            {
+                if (currentIndex < tilesAbove)
+                {
+                    originalPos.Add(tiles[x, y + matchCount].transform.position);
+                    sequence.Join(tiles[x, y + matchCount].transform.DOMove(originalPos[currentIndex], 0.25f));
+                    tiles[x, y + matchCount].GetComponent<Tile>().GridPos = new Tile.GridPosition(x, y, true);
+                    RefreshBoard(tiles[x, y + matchCount].GetComponent<Tile>().GridPos, tiles[x, y + matchCount]);
+                }
+                else
+                {
+                    sequence.Join(horizontalMatch[matchIndex].transform.DOMove(originalPos[currentIndex], 0.25f));
+                    horizontalMatch[matchIndex].GridPos = new Tile.GridPosition(x, y, true);
+                    RefreshBoard(horizontalMatch[matchIndex].GridPos, horizontalMatch[matchIndex].gameObject);
+
+                    matchIndex++;
+                }
+
+                currentIndex++;
+            }
+
+            await sequence.Play().AsyncWaitForCompletion();
+        }
+    }
+
+    public Tile GetTile(Tile.GridPosition grid)
+    {
+        return tiles[grid.X, grid.Y].GetComponent<Tile>();
+    }
+
+    public void RefreshBoard(Tile.GridPosition grid, GameObject tile)
+    {
+        tiles[grid.X, grid.Y] = tile;
     }
 }
