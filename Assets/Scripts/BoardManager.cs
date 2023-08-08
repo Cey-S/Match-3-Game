@@ -90,7 +90,7 @@ public class BoardManager : MonoBehaviour
         }
     }
 
-    public async Task FindEmptyTiles()
+    public async void FindEmptyTiles()
     {
         IsShifting = true;
 
@@ -98,77 +98,94 @@ public class BoardManager : MonoBehaviour
 
         for (int x = 0; x < _rowSize; x++)
         {
-            List<Tile> horizontalMatch = new List<Tile>();
             for (int y = 0; y < _columnSize; y++)
             {
                 if (!tiles[x, y].GetComponent<Tile>().GridPos.IsFilled)
                 {
-                    horizontalMatch.Add(tiles[x, y].GetComponent<Tile>());
+                    shiftTasks.Add(ShiftTilesDownFrom(x, y));
+                    break;
                 }
             }
-            shiftTasks.Add(ShiftTilesDown(horizontalMatch));
         }
 
-        await Task.WhenAll(shiftTasks);
-
-        
-        IsShifting = false;
-    }    
-
-    private async Task ShiftTilesDown(List<Tile> horizontalMatch)
-    {
-        int matchCount = horizontalMatch.Count;
-        if (matchCount != 0)
+        if (shiftTasks.Count != 0)
         {
-            int x = horizontalMatch[0].GridPos.X;
+            await Task.WhenAll(shiftTasks);
 
-            List<Vector3> originalPos = new List<Vector3>();
-            for (int i = 0; i < matchCount; i++)
-            {
-                originalPos.Add(horizontalMatch[i].transform.position);
-                Vector3 offset = new Vector3(0, tileSize.y + (i * tileSize.y), 0);
-                horizontalMatch[i].transform.position = tiles[x, _columnSize - 1].transform.position + offset;
-
-                Sprite randomSprite = characters[Random.Range(0, characters.Count)];
-                horizontalMatch[i].GetComponent<SpriteRenderer>().sprite = randomSprite;
-            }
-
-            int yStart = horizontalMatch[0].GridPos.Y;
-            int shiftingTiles = _columnSize - yStart;
-            int tilesAbove = shiftingTiles - matchCount;
-            int currentIndex = 0;
-            int matchIndex = 0;
-            var sequence = DOTween.Sequence();
-
-            for (int y = yStart; y < _columnSize; y++)
-            {
-                if (currentIndex < tilesAbove)
-                {
-                    originalPos.Add(tiles[x, y + matchCount].transform.position);
-                    sequence.Join(tiles[x, y + matchCount].transform.DOMove(originalPos[currentIndex], 0.25f));
-                    tiles[x, y + matchCount].GetComponent<Tile>().GridPos = new Tile.GridPosition(x, y, true);
-                    RefreshBoard(tiles[x, y + matchCount].GetComponent<Tile>().GridPos, tiles[x, y + matchCount]);
-                }
-                else
-                {
-                    sequence.Join(horizontalMatch[matchIndex].transform.DOMove(originalPos[currentIndex], 0.25f));
-                    horizontalMatch[matchIndex].GridPos = new Tile.GridPosition(x, y, true);
-                    RefreshBoard(horizontalMatch[matchIndex].GridPos, horizontalMatch[matchIndex].gameObject);
-
-                    matchIndex++;
-                }
-
-                currentIndex++;
-            }
-
-            await sequence.Play().AsyncWaitForCompletion();
+            Combos();
         }
+
+        IsShifting = false;
     }
 
-    public Tile GetTile(Tile.GridPosition grid)
+    private async void Combos()
     {
-        return tiles[grid.X, grid.Y].GetComponent<Tile>();
+        for (int x = 0; x < _rowSize; x++)
+        {
+            for (int y = 0; y < _columnSize; y++)
+            {
+                await tiles[x, y].GetComponent<Tile>().ClearAllMatches();
+            }
+        }
+
+        FindEmptyTiles();
     }
+
+    private async Task ShiftTilesDownFrom(int x, int y)
+    {
+        int yCurrent = y;
+        int shiftingTiles = _columnSize - yCurrent;
+        Vector3[] originalPos = new Vector3[shiftingTiles];
+        List<Tile> verticalMatch = new List<Tile>();
+        List<Tile> firstShift = new List<Tile>();
+
+        for (int i = 0; i < shiftingTiles; i++)
+        {
+            Tile currentTile = tiles[x, y].GetComponent<Tile>();
+            originalPos[i] = currentTile.transform.position;
+
+            if (!currentTile.GridPos.IsFilled)
+            {
+                verticalMatch.Add(currentTile);
+            }
+            else
+            {
+                firstShift.Add(currentTile);
+            }
+
+            y++;
+        }
+
+        int newSpawn = verticalMatch.Count;
+
+        for (int i = 0; i < newSpawn; i++)
+        {
+            Vector3 offset = new Vector3(0, tileSize.y + (i * tileSize.y), 0);
+            verticalMatch[i].transform.position = tiles[x, _columnSize - 1].transform.position + offset;
+
+            Sprite randomSprite = characters[Random.Range(0, characters.Count)];
+            verticalMatch[i].GetComponent<SpriteRenderer>().sprite = randomSprite;
+        }
+
+        List<Tile> shiftOrder = new List<Tile>();
+        shiftOrder.AddRange(firstShift);
+        shiftOrder.AddRange(verticalMatch);
+
+        var sequence = DOTween.Sequence();
+
+        for (int i = 0; i < shiftingTiles; i++)
+        {
+            sequence.Join(shiftOrder[i].transform.DOMove(originalPos[i], 0.25f));
+            
+            Tile.GridPosition currentGrid = new Tile.GridPosition(x, yCurrent, true);
+            shiftOrder[i].GridPos = currentGrid;
+            RefreshBoard(currentGrid, shiftOrder[i].gameObject);
+            
+            yCurrent++;
+        }
+
+        await sequence.Play().AsyncWaitForCompletion();
+    }    
 
     public void RefreshBoard(Tile.GridPosition grid, GameObject tile)
     {

@@ -87,7 +87,7 @@ public class Tile : MonoBehaviour
                     
                     previousSelected.Deselect();
 
-                    await BoardManager.instance.FindEmptyTiles();
+                    BoardManager.instance.FindEmptyTiles();
                     
                     lockTiles = false;
                 }
