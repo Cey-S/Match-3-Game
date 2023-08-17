@@ -24,16 +24,16 @@ public class Tile : MonoBehaviour
 
     public GridPosition GridPos;
 
-    private const float TweenDuration = 0.25f;
+    public static bool LockTiles { get; private set; } // prevent tiles from being selected
 
     private static Color selectedColor = new Color(0.5f, 0.5f, 0.5f, 1.0f);
     private static Tile previousSelected = null;
-    private static bool lockTiles = false; // prevent tiles from being selected
-
-    private SpriteRenderer render;
     private bool isSelected = false;
 
+    private SpriteRenderer render;
     private Vector2[] adjacentDirections = new Vector2[] { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
+
+    private const float TweenDuration = 0.25f;
 
     private void Awake()
     {
@@ -56,7 +56,7 @@ public class Tile : MonoBehaviour
 
     private async void OnMouseDown()
     {
-        if (lockTiles || BoardManager.instance.IsShifting || render.sprite == null)
+        if (GameManager.Instance.GameOver || LockTiles || BoardManager.Instance.IsShifting || render.sprite == null)
         {
             return;
         }
@@ -75,7 +75,7 @@ public class Tile : MonoBehaviour
             {
                 if (GetAllAdjacentTiles().Contains(previousSelected.gameObject))
                 {
-                    lockTiles = true;
+                    LockTiles = true;
 
                     await Swap(previousSelected, this);
 
@@ -87,9 +87,9 @@ public class Tile : MonoBehaviour
                     
                     previousSelected.Deselect();
 
-                    BoardManager.instance.FindEmptyTiles();
+                    BoardManager.Instance.FindEmptyTiles();
                     
-                    lockTiles = false;
+                    LockTiles = false;
                 }
                 else
                 {
@@ -109,7 +109,7 @@ public class Tile : MonoBehaviour
         GridPosition grid2 = tile2.GridPos;
 
 
-        if (!BoardManager.instance.IsShifting && tile1.GetComponent<SpriteRenderer>().sprite == tile2.GetComponent<SpriteRenderer>().sprite)
+        if (!BoardManager.Instance.IsShifting && tile1.GetComponent<SpriteRenderer>().sprite == tile2.GetComponent<SpriteRenderer>().sprite)
         {
             var yoyoSequence = DOTween.Sequence();
 
@@ -134,8 +134,10 @@ public class Tile : MonoBehaviour
             tile1.GridPos = grid2;
             tile2.GridPos = grid1;
 
-            BoardManager.instance.RefreshBoard(grid1, tile2.gameObject);
-            BoardManager.instance.RefreshBoard(grid2, tile1.gameObject);
+            BoardManager.Instance.RefreshBoard(grid1, tile2.gameObject);
+            BoardManager.Instance.RefreshBoard(grid2, tile1.gameObject);
+
+            GameUIHandler.Instance.MoveCounter--; // Swapping happened, decrease one move
         }
     }
 
@@ -196,6 +198,8 @@ public class Tile : MonoBehaviour
 
         foreach (GameObject tile in tiles)
         {
+            GameUIHandler.Instance.Score += 10; // For each tile cleared, add score
+
             tile.transform.localScale = originalScale;
             tile.GetComponent<SpriteRenderer>().sprite = null;
         }

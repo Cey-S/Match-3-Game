@@ -6,7 +6,7 @@ using UnityEngine;
 
 public class BoardManager : MonoBehaviour
 {
-    public static BoardManager instance;
+    public static BoardManager Instance;
 
     public RectTransform board;
     public List<Sprite> characters = new List<Sprite>();
@@ -24,7 +24,7 @@ public class BoardManager : MonoBehaviour
 
     private void Start()
     {
-        instance = GetComponent<BoardManager>();
+        Instance = GetComponent<BoardManager>();
 
         Vector3[] corners = new Vector3[4];
         board.GetWorldCorners(corners); // board corners on canvas
@@ -46,6 +46,7 @@ public class BoardManager : MonoBehaviour
         float offset = (boardWidth - (tileSize.x * _rowSize)) * 0.5f;
 
         CreateBoard(_rowSize, _columnSize, offset);
+        GameManager.Instance.GameOver = false;
     }
 
     private void CreateBoard(int rowSize, int columnSize, float offset)
@@ -108,14 +109,16 @@ public class BoardManager : MonoBehaviour
             }
         }
 
-        if (shiftTasks.Count != 0)
+        if (shiftTasks.Count == 0)
+        {
+            IsShifting = false;
+        }
+        else
         {
             await Task.WhenAll(shiftTasks);
 
             Combos();
         }
-
-        IsShifting = false;
     }
 
     private async void Combos()
@@ -176,16 +179,16 @@ public class BoardManager : MonoBehaviour
         for (int i = 0; i < shiftingTiles; i++)
         {
             sequence.Join(shiftOrder[i].transform.DOMove(originalPos[i], 0.25f));
-            
+
             Tile.GridPosition currentGrid = new Tile.GridPosition(x, yCurrent, true);
             shiftOrder[i].GridPos = currentGrid;
             RefreshBoard(currentGrid, shiftOrder[i].gameObject);
-            
+
             yCurrent++;
         }
 
         await sequence.Play().AsyncWaitForCompletion();
-    }    
+    }
 
     public void RefreshBoard(Tile.GridPosition grid, GameObject tile)
     {
